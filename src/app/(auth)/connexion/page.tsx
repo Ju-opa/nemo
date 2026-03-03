@@ -1,20 +1,46 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
 import { Eye, EyeOff, LogIn, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/providers/auth-provider";
 import { cn } from "@/lib/utils";
 
-export default function ConnexionPage() {
+function ConnexionContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user } = useAuth();
+  const inviteToken = searchParams.get("invite");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Après confirmation email : user authentifié + invite dans l'URL → activer le token
+  useEffect(() => {
+    if (!user || !inviteToken) return;
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/invite/redeem", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: inviteToken }),
+        });
+        const data = (await res.json()) as { ok?: boolean; role?: string };
+        const destination = data.role === "vip" ? "/" : "/onboarding";
+        router.replace(destination);
+        router.refresh();
+      } catch {
+        router.replace("/");
+        router.refresh();
+      }
+    })();
+  }, [user, inviteToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,5 +171,21 @@ export default function ConnexionPage() {
         </div>
       </div>
     </motion.div>
+  );
+}
+
+export default function ConnexionPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="relative w-full max-w-md">
+          <div className="glass-strong rounded-3xl p-8 shadow-2xl flex items-center justify-center min-h-80">
+            <Loader2 className="size-8 text-[#e8b84b] animate-spin" />
+          </div>
+        </div>
+      }
+    >
+      <ConnexionContent />
+    </Suspense>
   );
 }

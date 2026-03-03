@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "motion/react";
-import { Eye, EyeOff, UserPlus, Loader2, Star, Zap } from "lucide-react";
+import { Eye, EyeOff, Mail, UserPlus, Loader2, Star, Zap } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ function InscriptionContent() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [emailConfirmationRequired, setEmailConfirmationRequired] = useState(false);
 
   // État du token d'invitation
   const [inviteStatus, setInviteStatus] = useState<"checking" | "valid" | "invalid" | "none">(
@@ -87,20 +88,24 @@ function InscriptionContent() {
       const supabase = createClient();
 
       // 1. Créer le compte Supabase
-      const { error: authError } = await supabase.auth.signUp({
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
           data: {
             display_name: displayName.trim() || email.split("@")[0],
           },
+          emailRedirectTo:
+            typeof window !== "undefined"
+              ? `${window.location.origin}/connexion${inviteToken ? `?invite=${encodeURIComponent(inviteToken)}` : ""}`
+              : undefined,
         },
       });
 
       if (authError) throw new Error(authError.message);
 
-      // 2. Activer le token d'invitation si présent et valide
-      if (inviteToken && inviteStatus === "valid") {
+      // 2. Activer le token d'invitation si présent et valide (uniquement si session active)
+      if (authData.session && inviteToken && inviteStatus === "valid") {
         try {
           await fetch("/api/invite/redeem", {
             method: "POST",
@@ -115,12 +120,18 @@ function InscriptionContent() {
 
       setSuccess(true);
 
-      // Les VIP sautent l'onboarding (déjà configuré par /redeem)
-      const destination = inviteRole === "vip" ? "/" : "/onboarding";
-      setTimeout(() => {
-        router.push(destination);
-        router.refresh();
-      }, 2000);
+      // Si Supabase requiert une confirmation par email, session est null
+      const needsEmailConfirmation = !authData.session;
+      setEmailConfirmationRequired(needsEmailConfirmation);
+
+      if (!needsEmailConfirmation) {
+        // Pas de confirmation requise : redirection directe
+        const destination = inviteRole === "vip" ? "/" : "/onboarding";
+        setTimeout(() => {
+          router.push(destination);
+          router.refresh();
+        }, 2000);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erreur lors de la création du compte");
     } finally {
@@ -137,16 +148,45 @@ function InscriptionContent() {
       >
         <div className="glass-strong rounded-3xl p-8 shadow-2xl text-center">
           <div className="flex justify-center mb-6">
-            <div className="flex items-center justify-center size-16 rounded-full bg-green-500/20 text-green-400">
-              <UserPlus className="size-8" />
+            <div
+              className={cn(
+                "flex items-center justify-center size-16 rounded-full",
+                emailConfirmationRequired
+                  ? "bg-amber-500/20 text-amber-400"
+                  : "bg-green-500/20 text-green-400"
+              )}
+            >
+              {emailConfirmationRequired ? (
+                <Mail className="size-8" />
+              ) : (
+                <UserPlus className="size-8" />
+              )}
             </div>
           </div>
-          <h1 className="text-white text-2xl font-bold mb-3">Compte créé !</h1>
-          <p className="text-white/60 text-sm leading-relaxed">
-            {inviteRole === "vip"
-              ? "Bienvenue ! Votre accès VIP est activé. Redirection en cours\u2026"
-              : "Votre compte a bien été créé. Redirection en cours\u2026"}
+          <h1 className="text-white text-2xl font-bold mb-3">
+            {emailConfirmationRequired ? "Vérifiez votre email" : "Compte créé !"}
+          </h1>
+          <p className="text-white/60 text-sm leading-relaxed mb-6">
+            {emailConfirmationRequired ? (
+              <>
+                Un email de confirmation a été envoyé à{" "}
+                <span className="text-white font-medium">{email}</span>. Cliquez sur le lien dans
+                l&apos;email pour activer votre compte, puis connectez-vous.
+              </>
+            ) : inviteRole === "vip" ? (
+              "Bienvenue ! Votre accès VIP est activé. Redirection en cours…"
+            ) : (
+              "Votre compte a bien été créé. Redirection en cours…"
+            )}
           </p>
+          {emailConfirmationRequired && (
+            <Link
+              href="/connexion"
+              className="inline-flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold text-sm bg-nemo-accent hover:bg-[#f0c85a] text-black transition-colors"
+            >
+              Aller à la page de connexion
+            </Link>
+          )}
         </div>
       </motion.div>
     );

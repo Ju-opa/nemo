@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
@@ -16,7 +16,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://nemo.laubier.online";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(appUrl),
   title: {
     default: "Nemo — Streaming sans limites",
     template: "%s | Nemo",
@@ -24,19 +27,43 @@ export const metadata: Metadata = {
   description:
     "Découvrez des millions de films et séries. Streaming 4K, VF & VOSTFR, propulsé par TMDb.",
   keywords: ["streaming", "films", "séries", "4K", "VF", "VOSTFR"],
+  authors: [{ name: "Nemo" }],
+  creator: "Nemo",
   openGraph: {
     type: "website",
     locale: "fr_FR",
-    title: "Nemo — Streaming sans limites",
-    description: "Découvrez des millions de films et séries. Streaming 4K, VF & VOSTFR.",
+    url: appUrl,
     siteName: "Nemo",
+    title: "Nemo — Streaming sans limites",
+    description:
+      "Découvrez des millions de films et séries. Streaming 4K, VF & VOSTFR, propulsé par TMDb.",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: "Nemo — Streaming sans limites",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Nemo",
-    description: "Streaming 4K · VF & VOSTFR · Films & Séries",
+    title: "Nemo — Streaming sans limites",
+    description: "Découvrez des millions de films et séries. Streaming 4K, VF & VOSTFR.",
+    images: ["/opengraph-image"],
   },
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-icon",
+  },
+  manifest: "/manifest.webmanifest",
   robots: { index: false, follow: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#080a0f",
 };
 
 export default function RootLayout({
