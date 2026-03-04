@@ -15,6 +15,7 @@ export type ListSummary = {
   is_default: boolean;
   is_public: boolean;
   item_count: number;
+  items: Array<{ tmdb_id: number; media_type: string }>;
   role: "owner" | "member";
   members: Array<{ user_id: string; display_name: string | null; avatar_url: string | null; role: "owner" | "member" }>;
   created_at: string;
@@ -33,7 +34,7 @@ export async function GET() {
       role,
       list:lists (
         id, name, icon, is_default, is_public, created_at,
-        list_items (id),
+        list_items (tmdb_id, media_type),
         list_members (
           role,
           user_id,
@@ -53,7 +54,7 @@ export async function GET() {
     is_default: boolean;
     is_public: boolean;
     created_at: string;
-    list_items: { id: string }[];
+    list_items: { tmdb_id: number; media_type: string }[];
     list_members: Array<{ role: string; user_id: string; profile: { display_name: string | null; avatar_url: string | null } | null }>;
   };
   type MemberRow = { role: string; list: RowList | null };
@@ -70,6 +71,7 @@ export async function GET() {
       is_default: list.is_default,
       is_public: list.is_public,
       item_count: list.list_items?.length ?? 0,
+      items: (list.list_items ?? []).map((i) => ({ tmdb_id: i.tmdb_id, media_type: i.media_type })),
       role: row.role as "owner" | "member",
       members: (list.list_members ?? []).map((m) => ({
         user_id: m.user_id,
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
       name: name.trim(),
       icon: icon ?? randomIcon(),
       is_default: false,
-      is_public: false,
+      is_public: true,
     })
     .select("id, name, icon, is_default, is_public, created_at")
     .single();

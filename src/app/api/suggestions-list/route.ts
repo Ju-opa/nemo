@@ -23,7 +23,7 @@ async function getOrCreateSuggestionsList(userId: string): Promise<string> {
       name: SUGGESTIONS_LIST_NAME,
       is_default: false,
       icon: "✨",
-      is_public: false,
+      is_public: true,
       non_deletable: true,
     })
     .select("id")
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       const { error } = await supabase
         .from("list_items")
         .upsert(
-          { list_id: listId, tmdb_id: tmdbId, media_type: mediaType, added_by: user.id },
+          { list_id: listId, tmdb_id: tmdbId, media_type: mediaType },
           { onConflict: "list_id,tmdb_id,media_type", ignoreDuplicates: true }
         );
       if (error && !error.message.includes("23505")) {

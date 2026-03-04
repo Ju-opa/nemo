@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { Sparkles, ArrowRight } from "lucide-react";
 import { SwipeStack } from "@/components/discover/SwipeStack";
-import { useSwipeSession } from "@/hooks/use-swipe-session";
+import { useSwipeSession, type SwipeAction } from "@/hooks/use-swipe-session";
+
+const ALL_SWIPE_TYPES: SwipeAction[] = ["like", "dislike", "list", "pas_vu"];
 
 interface StepDiscoverProps {
   onNext: () => void;
@@ -14,9 +16,23 @@ export default function StepDiscover({ onNext }: StepDiscoverProps) {
   const { cards, currentIndex, swipeCount, levelTarget, level, isLoading, isMilestone, loadCards, swipe } =
     useSwipeSession();
 
+  const seenActionsRef = useRef(new Set<SwipeAction>());
+  const [navigating, setNavigating] = useState(false);
+
   useEffect(() => {
     void loadCards();
   }, [loadCards]);
+
+  const handleSwipe = async (action: SwipeAction) => {
+    await swipe(action);
+
+    seenActionsRef.current.add(action);
+
+    if (ALL_SWIPE_TYPES.every((t) => seenActionsRef.current.has(t)) && !navigating) {
+      setNavigating(true);
+      onNext();
+    }
+  };
 
   return (
     <motion.div
@@ -32,12 +48,12 @@ export default function StepDiscover({ onNext }: StepDiscoverProps) {
           <h2 className="text-white font-bold text-xl">Définis tes goûts</h2>
         </div>
         <p className="text-white/50 text-sm">
-          Swipe les films pour que Nemo apprenne ce que tu aimes. Objectif : 20 swipes.
+          Essaie chaque bouton pour découvrir comment swiper, puis Nemo t&apos;emmène directement sur l&apos;app.
         </p>
       </div>
 
       {/* Stack de cartes */}
-      {!isLoading && cards.length > 0 && !isMilestone && (
+      {!isLoading && cards.length > 0 && !isMilestone && !navigating && (
         <div className="w-full" style={{ height: 480 }}>
           <SwipeStack
             cards={cards}
@@ -45,19 +61,19 @@ export default function StepDiscover({ onNext }: StepDiscoverProps) {
             swipeCount={swipeCount}
             target={levelTarget}
             level={level}
-            onSwipe={(action) => void swipe(action)}
+            onSwipe={(action) => void handleSwipe(action)}
             className="h-full"
           />
         </div>
       )}
 
-      {isLoading && (
+      {(isLoading || navigating) && (
         <div className="flex justify-center items-center h-48">
           <div className="size-8 rounded-full border-2 border-nemo-accent/30 border-t-nemo-accent animate-spin" />
         </div>
       )}
 
-      {isMilestone && (
+      {isMilestone && !navigating && (
         <div className="text-center py-6 space-y-3">
           <div className="size-14 rounded-full bg-nemo-accent/20 ring-1 ring-nemo-accent/30 flex items-center justify-center mx-auto">
             <Sparkles className="size-7 text-nemo-accent" />
@@ -68,21 +84,23 @@ export default function StepDiscover({ onNext }: StepDiscoverProps) {
       )}
 
       {/* Boutons bas */}
-      <div className="flex items-center justify-between pt-2 gap-4">
-        <button
-          onClick={onNext}
-          className="text-white/40 text-sm hover:text-white/70 transition-colors"
-        >
-          Passer cette étape
-        </button>
-        <button
-          onClick={onNext}
-          className="flex items-center gap-2 bg-nemo-accent hover:bg-[#f0c85a] active:scale-95 text-black font-semibold px-6 py-3 rounded-xl transition-all"
-        >
-          <ArrowRight className="size-4" />
-          {isMilestone ? "Terminer" : "Continuer"}
-        </button>
-      </div>
+      {!navigating && (
+        <div className="flex items-center justify-between pt-2 gap-4">
+          <button
+            onClick={onNext}
+            className="text-white/40 text-sm hover:text-white/70 transition-colors"
+          >
+            Passer cette étape
+          </button>
+          <button
+            onClick={onNext}
+            className="flex items-center gap-2 bg-nemo-accent hover:bg-[#f0c85a] active:scale-95 text-black font-semibold px-6 py-3 rounded-xl transition-all"
+          >
+            <ArrowRight className="size-4" />
+            {isMilestone ? "Terminer" : "Continuer"}
+          </button>
+        </div>
+      )}
     </motion.div>
   );
 }

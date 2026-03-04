@@ -1,9 +1,10 @@
 "use client";
 
-import { forwardRef, useImperativeHandle, useState } from "react";
-import { motion, useMotionValue, useTransform, useAnimation, AnimatePresence } from "motion/react";
+import { forwardRef, useImperativeHandle } from "react";
+import { motion, useMotionValue, useTransform, useAnimation } from "motion/react";
 import Image from "next/image";
-import { Star, Info, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Star, Info } from "lucide-react";
 import { tmdbImage } from "@/lib/tmdb/client";
 import { cn } from "@/lib/utils";
 import type { SwipeAction } from "@/hooks/use-swipe-session";
@@ -26,6 +27,7 @@ interface SwipeCardProps {
   mediaType: "movie" | "tv";
   onSwipe: (action: SwipeAction) => void;
   isTop: boolean;
+  isPriority?: boolean;
 }
 
 const GENRE_MAP: Record<number, string> = {
@@ -38,8 +40,8 @@ const GENRE_MAP: Record<number, string> = {
 };
 
 export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
-  function SwipeCard({ title, year, posterPath, backdropPath, voteAverage, genreIds, overview, onSwipe, isTop }, ref) {
-    const [infoOpen, setInfoOpen] = useState(false);
+  function SwipeCard({ tmdbId, title, year, posterPath, backdropPath, voteAverage, genreIds, overview: _overview, mediaType, onSwipe, isTop, isPriority }, ref) {
+    const router = useRouter();
     const controls = useAnimation();
     const x = useMotionValue(0);
     const y = useMotionValue(0);
@@ -131,7 +133,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
       <motion.div
         className="absolute inset-0 select-none touch-none"
         style={{ x, y, rotate, cursor: isTop ? "grab" : "default" }}
-        drag={isTop && !infoOpen}
+        drag={isTop}
         dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
         dragElastic={0.85}
         animate={controls}
@@ -179,7 +181,7 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
                 fill
                 className="object-cover"
                 sizes="(max-width: 480px) 100vw, 380px"
-                priority={isTop}
+                priority={isTop || isPriority}
                 draggable={false}
               />
             ) : (
@@ -197,11 +199,14 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
               {voteAverage.toFixed(1)}
             </div>
 
-            {/* Bouton info — top-left */}
+            {/* Bouton info — top-left → navigue vers la page détail */}
             {isTop && (
               <button
                 onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => { e.stopPropagation(); setInfoOpen((v) => !v); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  router.push(mediaType === "movie" ? `/film/${tmdbId}` : `/serie/${tmdbId}`);
+                }}
                 className="absolute top-3 left-3 z-10 size-8 rounded-full bg-black/40 backdrop-blur-sm border border-white/20 flex items-center justify-center"
               >
                 <Info className="size-4 text-white/70" />
@@ -227,42 +232,6 @@ export const SwipeCard = forwardRef<SwipeCardHandle, SwipeCardProps>(
                 </div>
               )}
             </div>
-
-            {/* Overlay info — slide depuis le bas */}
-            <AnimatePresence>
-              {infoOpen && (
-                <motion.div
-                  initial={{ y: "100%" }}
-                  animate={{ y: 0 }}
-                  exit={{ y: "100%" }}
-                  transition={{ type: "spring", stiffness: 280, damping: 28 }}
-                  className="absolute inset-x-0 bottom-0 z-20 bg-black/92 backdrop-blur-md rounded-b-3xl p-5 max-h-[70%] overflow-y-auto"
-                  onPointerDown={(e) => e.stopPropagation()}
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <h2 className="text-white font-bold text-lg leading-tight">{title}</h2>
-                      {year && <p className="text-white/40 text-sm">{year}</p>}
-                    </div>
-                    <button onClick={() => setInfoOpen(false)}>
-                      <X className="size-5 text-white/40" />
-                    </button>
-                  </div>
-                  {genres.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 mb-3">
-                      {genres.map((g) => (
-                        <span key={g} className="text-[11px] px-2.5 py-0.5 rounded-full bg-white/10 text-white/70">
-                          {g}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {overview && (
-                    <p className="text-white/65 text-sm leading-relaxed">{overview}</p>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
           </div>
         </div>
       </motion.div>

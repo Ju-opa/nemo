@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -343,9 +343,10 @@ function ListItemsGrid({
   const [loading, setLoading] = useState(false);
 
   // Charge les items de la liste depuis l'API
-  useState(() => {
+  useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setItems([]);
     fetch(`/api/lists/${list.id}`)
       .then((r) => r.json())
       .then((data: { items?: Array<{ id: string; tmdb_id: number; media_type: "movie" | "tv"; title: string; poster_path: string | null }> }) => {
@@ -356,7 +357,7 @@ function ListItemsGrid({
       })
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  });
+  }, [list.id]);
 
   if (loading) {
     return (

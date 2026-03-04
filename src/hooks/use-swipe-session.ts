@@ -24,10 +24,10 @@ export interface SwipeCardData {
   overview: string;
 }
 
-// ── "Pas vu" — mémoriser 7 jours ─────────────────────────────────────────────
+// ── "Pas vu" — mémoriser 30 jours ─────────────────────────────────────────────
 
 const PAS_VU_KEY = "nemo_pas_vu";
-const PAS_VU_TTL = 7 * 24 * 3600 * 1000;
+const PAS_VU_TTL = 30 * 24 * 3600 * 1000;
 
 function markPasVu(tmdbId: number) {
   if (typeof window === "undefined") return;
@@ -65,6 +65,7 @@ interface SavedSession {
   swipeCount: number;
   level: number;
   likedGenres: number[];
+  seenIds: string[]; // "tmdbId-mediaType" format
   savedAt: number;
 }
 
@@ -134,6 +135,7 @@ export function useSwipeSession() {
 
   const pendingRef = useRef<SwipeEntry[]>([]);
   const likedGenresRef = useRef<number[]>([]);
+  const seenIdsRef = useRef<Set<string>>(new Set());
   const isLoadingRef = useRef(false);
 
   // ── Sauvegarde en batch des interactions ──────────────────────────────────
@@ -221,6 +223,10 @@ export function useSwipeSession() {
           setSwipeCount(saved.swipeCount);
           setLevel(saved.level);
           likedGenresRef.current = saved.likedGenres;
+          // Restaurer le seenIds depuis la session
+          if (saved.seenIds) {
+            seenIdsRef.current = new Set(saved.seenIds);
+          }
           // Restaurer le batch pending non encore envoyé
           const pendingRestored = restorePendingFromStorage();
           if (pendingRestored.length > 0) {
@@ -238,14 +244,20 @@ export function useSwipeSession() {
     isLoadingRef.current = true;
     setIsLoading(true);
     try {
-      const genres = [...new Set(likedGenresRef.current)].slice(0, 6).join(",");
-      const url = `/api/discover/cards${genres ? `?genres=${encodeURIComponent(genres)}` : ""}`;
+      // Construire le param exclude (max 150 IDs pour limiter taille URL)
+      const excludeParam = Array.from(seenIdsRef.current).slice(-150).join(",");
+      const url = `/api/discover/cards${excludeParam ? `?exclude=${encodeURIComponent(excludeParam)}` : ""}`;
       const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json() as { cards: SwipeCardData[] };
       if (data.cards.length > 0) {
         const pasVu = getPasVuSet();
-        const filteredCards = data.cards.filter((c: SwipeCardData) => !pasVu.has(c.id));
+        // Filtrer côté client aussi : seenIds + pasVu
+        const filteredCards = data.cards.filter(
+          (c: SwipeCardData) =>
+            !seenIdsRef.current.has(`${c.id}-${c.media_type ?? "movie"}`) &&
+            !pasVu.has(c.id)
+        );
         setCards(filteredCards);
         setCurrentIndex(0);
       }
@@ -269,6 +281,9 @@ export function useSwipeSession() {
         mediaType: (card.media_type ?? "movie") as "movie" | "tv",
         action,
       };
+
+      // Marquer comme vu (session-wide) pour éviter les doublons
+      seenIdsRef.current.add(`${card.id}-${card.media_type ?? "movie"}`);
 
       // Marquer "pas vu" dans localStorage
       if (action === "pas_vu") markPasVu(card.id);
@@ -311,13 +326,14 @@ export function useSwipeSession() {
         return;
       }
 
-      // Sauvegarder la progression
+      // Sauvegarder la progression (avec seenIds, cap à 200)
       saveSession({
         cards,
         currentIndex: nextIndex,
         swipeCount: newCount,
         level,
         likedGenres: likedGenresRef.current,
+        seenIds: Array.from(seenIdsRef.current).slice(-200),
       });
 
       if (nextIndex >= cards.length) {

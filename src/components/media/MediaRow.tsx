@@ -1,9 +1,10 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { MediaCard } from "./MediaCard";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
+import { useUserInteractions } from "@/lib/recommendations/user-interactions-context";
 import type { TMDbMovie, TMDbTVShow } from "@/types/tmdb";
 
 type MediaItem = TMDbMovie | TMDbTVShow;
@@ -62,10 +63,23 @@ export function MediaRow({
   providerSlug,
   hideIfSeen = false,
 }: MediaRowProps) {
+  const { isExcluded } = useUserInteractions();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  const displayItems = useMemo(() => {
+    if (!hideIfSeen) return items;
+    return items.filter((item) => {
+      const itemMediaType = (item as unknown as { media_type?: string }).media_type;
+      const resolvedType: "movie" | "tv" =
+        itemMediaType === "movie" || itemMediaType === "tv"
+          ? itemMediaType
+          : mediaType;
+      return !isExcluded(item.id, resolvedType);
+    });
+  }, [items, hideIfSeen, isExcluded, mediaType]);
 
   const checkScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -81,7 +95,7 @@ export function MediaRow({
     const ro = new ResizeObserver(checkScroll);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [checkScroll, items.length]);
+  }, [checkScroll, displayItems.length]);
 
   const scroll = useCallback((direction: "left" | "right", amountMultiplier = 0.75) => {
     const el = scrollRef.current;
@@ -94,6 +108,8 @@ export function MediaRow({
   const scrollMore = useCallback(() => {
     scroll("right", 2.2);
   }, [scroll]);
+
+  if (!isLoading && hideIfSeen && displayItems.length === 0) return null;
 
   return (
     <section className="relative group/row">
@@ -175,7 +191,7 @@ export function MediaRow({
         >
           {isLoading
             ? Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)
-            : items.map((item, index) => {
+            : displayItems.map((item, index) => {
                 const isHovered = hoveredIndex === index;
                 const widths = ROW_CARD_WIDTH_CLASSES[cardSize] ?? ROW_CARD_WIDTH_CLASSES.md;
                 const fixedHeight = ROW_CARD_HEIGHT[cardSize] ?? ROW_CARD_HEIGHT.md;
@@ -204,7 +220,7 @@ export function MediaRow({
                       onNotInterested={onNotInterested}
                       size={cardSize}
                       index={index}
-                      totalItems={items.length}
+                      totalItems={displayItems.length}
                       isHovered={isHovered}
                       onHoverStart={() => setHoveredIndex(index)}
                       onHoverEnd={() => setHoveredIndex(null)}

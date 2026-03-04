@@ -14,7 +14,6 @@ const VIP_JELLYFIN_SERVER_ID = process.env.VIP_JELLYFIN_SERVER_ID ?? null;
  * Active un token d'invitation pour l'utilisateur courant :
  * - Met à jour le rôle (free | sources | vip)
  * - Pour vip : pré-configure Jellyfin partagé + services tous cochés
- * - Marque onboarding_completed = true pour les VIP (skip onboarding)
  * - Enregistre l'utilisation dans invite_uses
  */
 export async function POST(req: NextRequest) {
@@ -84,7 +83,6 @@ export async function POST(req: NextRequest) {
   if (row.role === "vip") {
     // Services : null = tous cochés
     profileUpdates.streaming_services = null;
-    profileUpdates.onboarding_completed = true;
 
     // Pré-configurer le Jellyfin partagé
     if (VIP_JELLYFIN_URL) {

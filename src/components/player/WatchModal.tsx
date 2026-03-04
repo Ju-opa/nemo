@@ -23,6 +23,8 @@ import {
   Smartphone,
   Phone,
   Lock,
+  HelpCircle,
+  Monitor,
 } from "lucide-react";
 import { cn, getLanguageFlag } from "@/lib/utils";
 import { useStream } from "@/providers/stream-provider";
@@ -144,10 +146,13 @@ export interface WatchModalProps {
 function StreamRow({
   stream,
   onSelect,
+  vlcMode = false,
 }: {
   stream: ParsedStream;
   onSelect: (s: ParsedStream) => void;
+  vlcMode?: boolean;
 }) {
+  const langDisplay = vlcMode && stream.language === "MULTI" ? "Multi-langues" : stream.language;
   return (
     <button
       onClick={() => onSelect(stream)}
@@ -170,23 +175,25 @@ function StreamRow({
               LANG_COLORS[stream.language]
             )}
           >
-            {getLanguageFlag(stream.language)} {stream.language}
+            {getLanguageFlag(stream.language)} {langDisplay}
           </span>
-          {stream.codec && (
+          {!vlcMode && stream.codec && (
             <span className="text-white/40 text-xs border border-white/15 px-1.5 py-0.5 rounded">
               {stream.codec}
             </span>
           )}
-          {stream.hdr && stream.hdr !== "SDR" && (
+          {!vlcMode && stream.hdr && stream.hdr !== "SDR" && (
             <span className="text-purple-300 text-xs border border-purple-400/30 bg-purple-400/10 px-1.5 py-0.5 rounded">
               {stream.hdr}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 text-xs text-white/30">
-          {stream.source && <span>{stream.source}</span>}
-          {stream.sizeLabel && <span>{stream.sizeLabel}</span>}
-        </div>
+        {!vlcMode && (
+          <div className="flex items-center gap-3 text-xs text-white/30">
+            {stream.source && <span>{stream.source}</span>}
+            {stream.sizeLabel && <span>{stream.sizeLabel}</span>}
+          </div>
+        )}
       </div>
 
       <div className="shrink-0 flex items-center justify-center size-7 rounded-full bg-white/0 group-hover:bg-white/90 text-transparent group-hover:text-black transition-all duration-150">
@@ -287,6 +294,115 @@ function JfStreamRow({
   );
 }
 
+// ─── HelpPopup ────────────────────────────────────────────────────────────────
+
+function HelpPopup({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof navigator === "undefined") return false;
+    return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  });
+
+  const vlcMobileUrl = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent)
+    ? "https://apps.apple.com/fr/app/vlc-for-mobile/id650377962"
+    : "https://play.google.com/store/apps/details?id=org.videolan.vlc";
+
+  const mobileSteps = [
+    { n: 1, title: "Télécharge VLC", content: (
+      <a href={vlcMobileUrl} target="_blank" rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-lg bg-[#FF8800]/15 border border-[#FF8800]/25 text-[#FF8800] text-xs font-semibold hover:bg-[#FF8800]/25 transition-colors">
+        Télécharger VLC
+      </a>
+    )},
+    { n: 2, title: 'Clique "Regarder en streaming"', content: <p className="text-white/45 text-xs mt-0.5">Sélectionne une source — VLC s&apos;ouvre automatiquement.</p> },
+    { n: 3, title: "Changer de langue / sous-titres", content: <p className="text-white/45 text-xs mt-0.5 leading-relaxed">Dans VLC, appuie sur l&apos;écran → icône <span className="text-white/70">bulle vocale</span> pour la langue audio, icône <span className="text-white/70">sous-titres</span> pour les sous-titres.</p> },
+    { n: 4, title: "C'est parti !", content: <p className="text-white/45 text-xs mt-0.5">Reviens sur Nemo pour noter le film une fois terminé.</p> },
+  ];
+
+  const desktopSteps = [
+    { n: 1, title: "Télécharge VLC", content: (
+      <a href="https://www.videolan.org/vlc/" target="_blank" rel="noopener noreferrer"
+        className="inline-flex items-center gap-1.5 mt-1.5 px-3 py-1.5 rounded-lg bg-[#FF8800]/15 border border-[#FF8800]/25 text-[#FF8800] text-xs font-semibold hover:bg-[#FF8800]/25 transition-colors">
+        videolan.org
+      </a>
+    )},
+    { n: 2, title: 'Clique "Regarder en streaming"', content: <p className="text-white/45 text-xs mt-0.5 leading-relaxed">Un fichier .m3u est téléchargé. Double-clique dessus ou clic droit → <span className="text-white/70">Ouvrir avec → VLC</span>.</p> },
+    { n: 3, title: "Changer de langue / sous-titres", content: <p className="text-white/45 text-xs mt-0.5 leading-relaxed">Menu <span className="text-white/70">Audio → Piste audio</span> pour la langue, <span className="text-white/70">Sous-titres → Piste de sous-titres</span> pour les sous-titres.</p> },
+    { n: 4, title: "C'est parti !", content: <p className="text-white/45 text-xs mt-0.5">Reviens sur Nemo pour noter le film une fois terminé.</p> },
+  ];
+
+  const steps = isMobile ? mobileSteps : desktopSteps;
+
+  return (
+    <Dialog.Root open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <AnimatePresence>
+        {open && (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild>
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[9998] bg-black/70 backdrop-blur-sm"
+                onClick={onClose}
+              />
+            </Dialog.Overlay>
+            <Dialog.Content asChild>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.93, y: 24 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[9999] w-[calc(100vw-2rem)] max-w-sm max-h-[80dvh] overflow-y-auto rounded-2xl bg-[#0e1018] border border-white/8 shadow-2xl focus:outline-none"
+              >
+                <div className="flex items-center justify-between px-5 py-4 border-b border-white/8">
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="size-4.5 text-nemo-accent" />
+                    <Dialog.Title className="text-white font-semibold text-base">Comment regarder ?</Dialog.Title>
+                  </div>
+                  <Dialog.Close asChild>
+                    <button aria-label="Fermer" className="size-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
+                      <X className="size-4 text-white/60" />
+                    </button>
+                  </Dialog.Close>
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {/* Tabs */}
+                  <div className="flex gap-2 p-1 rounded-xl bg-white/5">
+                    <button
+                      onClick={() => setIsMobile(true)}
+                      className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors", isMobile ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60")}
+                    >
+                      <Smartphone className="size-4" /> Mobile
+                    </button>
+                    <button
+                      onClick={() => setIsMobile(false)}
+                      className={cn("flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium transition-colors", !isMobile ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60")}
+                    >
+                      <Monitor className="size-4" /> Ordinateur
+                    </button>
+                  </div>
+
+                  <div className="space-y-4">
+                    {steps.map(({ n, title, content }) => (
+                      <div key={n} className="flex gap-3">
+                        <span className="shrink-0 size-6 rounded-full bg-nemo-accent/20 text-nemo-accent text-xs font-bold flex items-center justify-center">{n}</span>
+                        <div><p className="text-white font-medium text-sm">{title}</p>{content}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-white/25 text-xs text-center">Streaming direct — aucun fichier stocké sur ton appareil</p>
+                </div>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        )}
+      </AnimatePresence>
+    </Dialog.Root>
+  );
+}
+
+// ─── TrackToggle ──────────────────────────────────────────────────────────────
+
 function TrackToggle({
   stream,
   checked,
@@ -375,7 +491,9 @@ export function WatchModal({
 
   const [view, setView] = useState<WatchView>("options");
   const [vlcReadyStream, setVlcReadyStream] = useState<ParsedStream | null>(null);
+  const [vlcFailed, setVlcFailed] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Lecteur intégré (quand onPlayStream n'est pas fourni)
   const [internalStream, setInternalStream] = useState<{
@@ -403,6 +521,7 @@ export function WatchModal({
 
   const streams = state.streams;
   const streamsLoading = state.isLoading;
+  const isMobileDevice = typeof navigator !== "undefined" && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
   // ── Probe ──────────────────────────────────────────────────────────────────
   const probeStream = useCallback(
@@ -513,9 +632,27 @@ export function WatchModal({
 
   // ── VLC handlers ───────────────────────────────────────────────────────────
   const handleVlcSelect = (stream: ParsedStream) => {
-    downloadM3U(stream, title);
     setVlcReadyStream(stream);
+    setVlcFailed(false);
+    if (!isMobileDevice) {
+      downloadM3U(stream, title);
+    }
     setView("vlc-ready");
+  };
+
+  const handleOpenVlcDeepLink = () => {
+    if (!vlcReadyStream) return;
+    window.location.href = `vlc://${vlcReadyStream.url}`;
+    if (!isMobileDevice) {
+      const timer = setTimeout(() => setVlcFailed(true), 2000);
+      const onHide = () => {
+        if (document.hidden) {
+          clearTimeout(timer);
+          document.removeEventListener("visibilitychange", onHide);
+        }
+      };
+      document.addEventListener("visibilitychange", onHide);
+    }
   };
 
   const handleCopyUrl = async () => {
@@ -568,6 +705,7 @@ export function WatchModal({
   const handleClose = useCallback(() => {
     setView("options");
     setVlcReadyStream(null);
+    setVlcFailed(false);
     setSelectedJfStream(null);
     setProbeStreams([]);
     setSelectedTracks(new Set());
@@ -629,6 +767,7 @@ export function WatchModal({
 
   // ── Back navigation ────────────────────────────────────────────────────────
   const handleBack = () => {
+    if (view === "vlc-ready") setVlcFailed(false);
     if (
       view === "vlc-sources" ||
       view === "vlc-ready" ||
@@ -774,6 +913,53 @@ export function WatchModal({
                     {view === "options" && (
                       <motion.div key="options" {...fadeSlide} className="space-y-3">
 
+                        {/* 0 — Streaming VLC — EN PREMIER */}
+                        {hasVlcOption && (
+                          <button
+                            onClick={() => setView("vlc-sources")}
+                            className="w-full p-4 rounded-2xl border border-[#FF8800]/30 bg-[#FF8800]/6 hover:border-[#FF8800]/50 hover:bg-[#FF8800]/10 transition-all text-left"
+                          >
+                            {/* Row 1: logo + title + GRATUIT */}
+                            <div className="flex items-center gap-3 mb-2.5">
+                              <div className="shrink-0 flex items-center justify-center size-11 rounded-xl bg-[#FF8800]/20">
+                                <svg width="26" height="26" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                  <rect width="512" height="512" rx="115" fill="#FF8800" />
+                                  <path d="M256 72 L390 330 H122 Z" fill="white" />
+                                  <path d="M256 72 L390 330 H256 Z" fill="rgba(0,0,0,0.12)" />
+                                  <rect x="108" y="338" width="296" height="36" rx="8" fill="white" />
+                                  <rect x="130" y="384" width="252" height="28" rx="7" fill="white" opacity="0.7" />
+                                </svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <span className="text-white font-bold text-base block leading-tight">Streaming</span>
+                                <div className="flex items-center gap-1.5 mt-0.5">
+                                  {streams.length > 0 && (
+                                    <span className="text-white/40 text-xs tabular-nums">{streams.length} source{streams.length > 1 ? "s" : ""}</span>
+                                  )}
+                                  {streamsLoading && streams.length === 0 && (
+                                    <Loader2 className="size-3 text-white/30 animate-spin" />
+                                  )}
+                                </div>
+                              </div>
+                              <span className="shrink-0 px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-xs font-bold">
+                                GRATUIT
+                              </span>
+                            </div>
+                            {/* Row 2: details */}
+                            <div className="ml-14 flex items-center gap-2 flex-wrap">
+                              <span className="text-sky-400/80 text-[11px] font-medium">Sans téléchargement</span>
+                              <span className="text-white/20 text-[11px]">·</span>
+                              <span className="flex items-center gap-1 text-[11px] text-white/35">
+                                <TriangleAlert className="size-3 text-amber-500/60" />
+                                App VLC requise
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-400/20 text-amber-400/60 text-[10px] font-medium">
+                                VPN conseillé
+                              </span>
+                            </div>
+                          </button>
+                        )}
+
                         {/* 1a — Lire directement dans NEMO via compte Jellyfin */}
                         {jellyfinInLibrary && jellyfinItemId && profile?.jellyfin_user_id && (
                           <button
@@ -882,16 +1068,6 @@ export function WatchModal({
                           </div>
                         )}
 
-                        {/* Divider before free options */}
-                        {(jellyfinInLibrary || (streamingOptions && streamingOptions.length > 0)) &&
-                          (hasJellyfinDownload || hasVlcOption) && (
-                            <div className="flex items-center gap-3">
-                              <div className="h-px flex-1 bg-white/8" />
-                              <span className="text-white/25 text-[11px]">Options gratuites</span>
-                              <div className="h-px flex-1 bg-white/8" />
-                            </div>
-                          )}
-
                         {/* 3 — Download to Jellyfin (not in library) */}
                         {hasJellyfinDownload && (
                           <button
@@ -921,50 +1097,6 @@ export function WatchModal({
                           </button>
                         )}
 
-                        {/* 4 — VLC / Torrent */}
-                        {hasVlcOption && (
-                          <button
-                            onClick={() => setView("vlc-sources")}
-                            className="w-full flex items-center gap-4 p-4 rounded-2xl border border-orange-500/18 hover:border-orange-500/35 hover:bg-orange-500/5 transition-all text-left"
-                          >
-                            <div className="shrink-0 flex items-center justify-center size-11 rounded-xl bg-orange-500/15">
-                              <svg
-                                viewBox="0 0 24 24"
-                                className="size-6 text-orange-400"
-                                fill="currentColor"
-                                aria-hidden
-                              >
-                                <path d="M11.18 2.5L2 21.5h20L12.82 2.5h-1.64zm.82 3l7.5 14H4.5L12 5.5z" />
-                                <rect x="9" y="22" width="6" height="1.5" rx="0.75" />
-                              </svg>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <span className="text-white font-semibold text-sm">
-                                  Regarder via VLC
-                                </span>
-                                {streams.length > 0 && (
-                                  <span className="text-white/30 text-xs tabular-nums">
-                                    {streams.length} source{streams.length > 1 ? "s" : ""}
-                                  </span>
-                                )}
-                                {streamsLoading && streams.length === 0 && (
-                                  <Loader2 className="size-3 text-white/30 animate-spin" />
-                                )}
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <span className="flex items-center gap-1 text-[11px] font-medium text-orange-400/90">
-                                  <TriangleAlert className="size-3" />
-                                  Illégal
-                                </span>
-                                <span className="text-[11px] text-white/35">· VPN conseillé</span>
-                              </div>
-                            </div>
-                            <span className="shrink-0 px-2.5 py-1 rounded-full bg-white/6 border border-white/12 text-white/40 text-xs font-bold">
-                              GRATUIT
-                            </span>
-                          </button>
-                        )}
 
                         {/* Empty state */}
                         {!hasAnyOption && (
@@ -997,14 +1129,23 @@ export function WatchModal({
                         )}
                         {streams.length > 0 && (
                           <>
-                            <p className="text-white/30 text-xs px-0.5 pb-1">
-                              Sélectionne une source pour télécharger le fichier .m3u
-                            </p>
+                            <div className="flex items-center justify-between px-0.5 pb-1">
+                              <span className="text-white/35 text-xs">{streams.length} source{streams.length > 1 ? "s" : ""} disponible{streams.length > 1 ? "s" : ""}</span>
+                              <button
+                                type="button"
+                                onClick={() => setHelpOpen(true)}
+                                className="flex items-center gap-1 text-white/35 hover:text-white/65 text-xs transition-colors"
+                              >
+                                <HelpCircle className="size-3.5" />
+                                Besoin d&apos;aide ?
+                              </button>
+                            </div>
                             {streams.slice(0, 12).map((stream) => (
                               <StreamRow
                                 key={stream.id}
                                 stream={stream}
                                 onSelect={handleVlcSelect}
+                                vlcMode
                               />
                             ))}
                           </>
@@ -1015,68 +1156,88 @@ export function WatchModal({
                     {/* ════ VLC READY ══════════════════════════════════ */}
                     {view === "vlc-ready" && vlcReadyStream && (
                       <motion.div key="vlc-ready" {...fadeSlide} className="space-y-4">
-                        {/* Source info */}
+                        {/* Source badge */}
                         <div className="flex items-center gap-2 p-3 rounded-xl bg-white/4 border border-white/8 flex-wrap">
-                          <span
-                            className={cn(
-                              "px-2 py-1 rounded-lg border text-xs font-bold tabular-nums",
-                              QUALITY_COLORS[vlcReadyStream.quality]
-                            )}
-                          >
+                          <span className={cn("px-2 py-1 rounded-lg border text-xs font-bold tabular-nums", QUALITY_COLORS[vlcReadyStream.quality])}>
                             {vlcReadyStream.quality}
                           </span>
-                          <span
-                            className={cn(
-                              "flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-semibold",
-                              LANG_COLORS[vlcReadyStream.language]
-                            )}
-                          >
-                            {getLanguageFlag(vlcReadyStream.language)} {vlcReadyStream.language}
+                          <span className={cn("flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-semibold", LANG_COLORS[vlcReadyStream.language])}>
+                            {getLanguageFlag(vlcReadyStream.language)} {vlcReadyStream.language === "MULTI" ? "Multi-langues" : vlcReadyStream.language}
                           </span>
-                          {vlcReadyStream.sizeLabel && (
-                            <span className="text-white/35 text-xs ml-auto tabular-nums">
-                              {vlcReadyStream.sizeLabel}
-                            </span>
-                          )}
                         </div>
 
-                        {/* Success state */}
-                        <div className="flex flex-col items-center gap-2 py-5 text-center">
-                          <CheckCircle2 className="size-10 text-emerald-400" />
-                          <p className="text-white font-semibold text-sm">
-                            Fichier .m3u téléchargé
-                          </p>
-                          <p className="text-white/40 text-xs max-w-xs leading-relaxed">
-                            Ouvre le fichier dans VLC pour lancer la lecture
-                          </p>
+                        {/* State indicator — mobile vs desktop */}
+                        <div className="flex flex-col items-center gap-2 py-4 text-center">
+                          {isMobileDevice ? (
+                            <>
+                              <div className="size-14 rounded-2xl bg-[#FF8800]/15 border border-[#FF8800]/25 flex items-center justify-center">
+                                <svg width="32" height="32" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+                                  <rect width="512" height="512" rx="115" fill="#FF8800" />
+                                  <path d="M256 72 L390 330 H122 Z" fill="white" />
+                                  <path d="M256 72 L390 330 H256 Z" fill="rgba(0,0,0,0.12)" />
+                                  <rect x="108" y="338" width="296" height="36" rx="8" fill="white" />
+                                  <rect x="130" y="384" width="252" height="28" rx="7" fill="white" opacity="0.7" />
+                                </svg>
+                              </div>
+                              <p className="text-white font-semibold text-sm">Prêt à regarder !</p>
+                              <p className="text-white/40 text-xs max-w-xs leading-relaxed">
+                                Appuie sur le bouton — VLC s&apos;ouvre automatiquement.
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="size-10 text-emerald-400" />
+                              <p className="text-white font-semibold text-sm">Fichier .m3u téléchargé</p>
+                              <p className="text-white/40 text-xs max-w-xs leading-relaxed">
+                                Clique sur le bouton ou ouvre le fichier depuis tes Téléchargements
+                              </p>
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setHelpOpen(true)}
+                            className="flex items-center gap-1.5 mt-1 text-white/35 hover:text-white/65 text-xs transition-colors"
+                          >
+                            <HelpCircle className="size-3.5" />
+                            Besoin d&apos;aide ?
+                          </button>
                         </div>
 
                         {/* Actions */}
                         <div className="space-y-2">
                           <button
-                            onClick={() => {
-                              window.location.href = `vlc://${vlcReadyStream.url}`;
-                            }}
-                            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-orange-500/18 border border-orange-500/30 hover:bg-orange-500/28 text-orange-300 font-semibold text-sm transition-all"
+                            onClick={handleOpenVlcDeepLink}
+                            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-[#FF8800]/18 border border-[#FF8800]/30 hover:bg-[#FF8800]/28 text-orange-300 font-semibold text-sm transition-all"
                           >
                             <ExternalLink className="size-4" />
                             Ouvrir avec VLC
                           </button>
+                          {/* Fallback hint if VLC deep link didn't open on desktop */}
+                          {!isMobileDevice && vlcFailed && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                              className="flex gap-3 p-3 rounded-xl bg-amber-500/8 border border-amber-500/20"
+                            >
+                              <TriangleAlert className="size-4 text-amber-400 shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-amber-300 text-xs font-semibold">VLC ne s&apos;est pas ouvert ?</p>
+                                <p className="text-amber-400/70 text-xs mt-0.5 leading-relaxed">
+                                  Ouvre tes <span className="text-amber-300">Téléchargements</span>, double-clique sur le fichier <span className="text-amber-300">.m3u</span> et choisis <span className="text-amber-300">Ouvrir avec → VLC</span>.
+                                </p>
+                              </div>
+                            </motion.div>
+                          )}
                           <button
-                            onClick={() => void handleCopyUrl()}
+                            onClick={() => {
+                              const a = document.createElement("a");
+                              a.href = vlcReadyStream.url;
+                              a.download = title.replace(/[^a-z0-9]/gi, "_");
+                              a.click();
+                            }}
                             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-white/8 hover:border-white/15 hover:bg-white/4 text-white/50 hover:text-white/80 text-sm transition-all"
                           >
-                            {copiedUrl ? (
-                              <>
-                                <CheckCircle2 className="size-4 text-emerald-400" />
-                                Copié !
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="size-4" />
-                                Copier le lien direct
-                              </>
-                            )}
+                            <Download className="size-4" />
+                            Télécharger hors-ligne
                           </button>
                         </div>
                       </motion.div>
@@ -1451,6 +1612,8 @@ export function WatchModal({
         )}
       </AnimatePresence>
     </Dialog.Root>
+
+    <HelpPopup open={helpOpen} onClose={() => setHelpOpen(false)} />
     </>
   );
 }

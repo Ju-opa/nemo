@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Sparkles, Film, Loader2, Check } from "lucide-react";
 import { motion } from "motion/react";
 import { ProviderLogo } from "@/components/ui/ProviderLogo";
@@ -12,7 +11,6 @@ interface StepDoneProps {
 }
 
 export default function StepDone({ imports }: StepDoneProps) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   const totalImported =
@@ -33,8 +31,7 @@ export default function StepDone({ imports }: StepDoneProps) {
     } catch {
       // continue anyway
     }
-    router.push("/");
-    router.refresh();
+    window.location.href = "/";
   };
 
   const sources = [

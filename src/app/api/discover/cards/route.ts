@@ -27,6 +27,22 @@ interface TMDbPage {
 
 type RowRef = { tmdb_id: number | null; media_type: string | null };
 
+// ── Genre pools ───────────────────────────────────────────────────────────────
+
+const ALL_MOVIE_GENRES = [28, 12, 16, 35, 80, 99, 18, 10751, 14, 36, 27, 9648, 10749, 878, 53, 10752, 37];
+const ALL_TV_GENRES   = [10759, 16, 35, 80, 18, 99, 10751, 27, 9648, 10765, 10768, 37];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+
 async function fetchDiscoverPage(page: number, extraParams: Record<string, string> = {}): Promise<TMDbMovie[]> {
   try {
     const url = new URL(`${TMDB_BASE}/discover/movie`);
@@ -44,6 +60,41 @@ async function fetchDiscoverPage(page: number, extraParams: Record<string, strin
     return (data.results ?? []).map((m) => ({ ...m, media_type: "movie" }));
   } catch {
     return [];
+  }
+}
+
+async function fetchDiscoverTVPage(page: number, extraParams: Record<string, string> = {}): Promise<TMDbMovie[]> {
+  try {
+    const url = new URL(`${TMDB_BASE}/discover/tv`);
+    url.searchParams.set("api_key", TMDB_KEY);
+    url.searchParams.set("language", "fr-FR");
+    url.searchParams.set("sort_by", "popularity.desc");
+    url.searchParams.set("vote_count.gte", "100");
+    url.searchParams.set("page", String(page));
+    for (const [k, v] of Object.entries(extraParams)) {
+      url.searchParams.set(k, v);
+    }
+    const res = await fetch(url.toString(), { next: { revalidate: 3600 } });
+    if (!res.ok) return [];
+    const data = await res.json() as TMDbPage;
+    return (data.results ?? []).map((m) => ({ ...m, media_type: "tv" }));
+  } catch {
+    return [];
+  }
+}
+
+async function fetchTasteProfile(userId: string): Promise<Record<string, number> | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("user_taste_profiles")
+      .select("genre_scores")
+      .eq("user_id", userId)
+      .single();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return ((data as any)?.genre_scores as Record<string, number>) ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -120,66 +171,86 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "Non connecté" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const preferredGenres = searchParams
-    .get("genres")
-    ?.split(",")
-    .map(Number)
-    .filter((n) => !isNaN(n) && n > 0) ?? [];
 
-  // IDs déjà vus / swipés / dans l'historique → exclus du feed
-  const excludedSet = await getExcludedIds(user.id);
-
-  // Construire les paramètres de requête TMDB
-  const extraParams: Record<string, string> = {};
-  if (preferredGenres.length > 0) {
-    // Combiner les genres préférés (films correspondant à AU MOINS UN genre)
-    extraParams.with_genres = preferredGenres.slice(0, 3).join("|");
-  }
-
-  // Charger 3 pages en parallèle pour avoir suffisamment de candidats
-  const pages = await Promise.all([
-    fetchDiscoverPage(1, extraParams),
-    fetchDiscoverPage(2, extraParams),
-    fetchDiscoverPage(3, extraParams),
-  ]);
-
-  // Si avec genres on n'a pas assez, compléter avec des films populaires sans filtre
-  const candidates = pages.flat().filter((m) => !excludedSet.has(`${m.id}-movie`));
-
-  if (candidates.length < 10) {
-    const fallback = await Promise.all([
-      fetchDiscoverPage(1),
-      fetchDiscoverPage(2),
-    ]);
-    const fallbackFiltered = fallback.flat().filter((m) => !excludedSet.has(`${m.id}-movie`));
-    const seen = new Set(candidates.map((m) => m.id));
-    for (const m of fallbackFiltered) {
-      if (!seen.has(m.id)) {
-        candidates.push(m);
-        seen.add(m.id);
-      }
+  // IDs déjà vus côté client (session-wide) → à exclure
+  const excludeParam = searchParams.get("exclude") ?? "";
+  const clientExcludedSet = new Set<string>();
+  if (excludeParam) {
+    for (const key of excludeParam.split(",")) {
+      if (key) clientExcludedSet.add(key.trim());
     }
   }
 
-  // Prioriser les films du genre préféré, puis par popularité
-  if (preferredGenres.length > 0) {
-    candidates.sort((a, b) => {
-      const aScore = a.genre_ids.filter((g) => preferredGenres.includes(g)).length;
-      const bScore = b.genre_ids.filter((g) => preferredGenres.includes(g)).length;
-      if (bScore !== aScore) return bScore - aScore;
-      return b.popularity - a.popularity;
-    });
+  // IDs déjà vus / swipés / dans l'historique → exclus du feed (DB)
+  const [dbExcludedSet, genreScores] = await Promise.all([
+    getExcludedIds(user.id),
+    fetchTasteProfile(user.id),
+  ]);
+
+  // Fusionner les deux sets d'exclusion
+  const excludedSet = new Set([...dbExcludedSet, ...clientExcludedSet]);
+
+  // ── Calcul des genres d'affinité et d'exploration ─────────────────────────
+
+  const scores = genreScores ?? {};
+  const lovedGenres = Object.entries(scores)
+    .filter(([, s]) => (s as number) > 0.3)
+    .sort(([, a], [, b]) => (b as number) - (a as number))
+    .map(([id]) => Number(id))
+    .slice(0, 4);
+
+  const knownGenreIds = new Set(Object.keys(scores).map(Number));
+  const explorationMoviePool = ALL_MOVIE_GENRES.filter((g) => !knownGenreIds.has(g));
+  const explorationTVPool = ALL_TV_GENRES.filter((g) => !knownGenreIds.has(g));
+  const exploMovieGenres = shuffleArray(explorationMoviePool).slice(0, 2);
+  const exploTVGenres = shuffleArray(explorationTVPool).slice(0, 2);
+
+  // ── Fetch en parallèle (4 buckets) ───────────────────────────────────────
+
+  const [affinityM, affinityTV, exploM, exploTV, trendingM, trendingTV, qualityM] = await Promise.all([
+    lovedGenres.length > 0
+      ? fetchDiscoverPage(1, { with_genres: lovedGenres.join("|") })
+      : fetchDiscoverPage(1),
+    lovedGenres.length > 0
+      ? fetchDiscoverTVPage(1, { with_genres: lovedGenres.join("|") })
+      : fetchDiscoverTVPage(1),
+    exploMovieGenres.length > 0
+      ? fetchDiscoverPage(1, { with_genres: exploMovieGenres.join("|"), sort_by: "vote_count.desc", "vote_count.gte": "200" })
+      : [],
+    exploTVGenres.length > 0
+      ? fetchDiscoverTVPage(1, { with_genres: exploTVGenres.join("|") })
+      : [],
+    fetchDiscoverPage(Math.ceil(Math.random() * 3)),
+    fetchDiscoverTVPage(Math.ceil(Math.random() * 3)),
+    fetchDiscoverPage(1, { sort_by: "vote_average.desc", "vote_count.gte": "1000" }),
+  ]);
+
+  // ── Interleaving pondéré ──────────────────────────────────────────────────
+
+  function pickN(pool: TMDbMovie[], n: number, seen: Set<number | string>): TMDbMovie[] {
+    const result: TMDbMovie[] = [];
+    for (const item of pool) {
+      if (result.length >= n) break;
+      const key = `${item.id}-${item.media_type ?? "movie"}`;
+      if (!excludedSet.has(key) && !seen.has(item.id)) {
+        result.push(item);
+        seen.add(item.id);
+      }
+    }
+    return result;
   }
 
-  // Déduplication finale et limite à 20 cartes
-  const seen = new Set<number>();
-  const cards = candidates
-    .filter((m) => {
-      if (seen.has(m.id)) return false;
-      seen.add(m.id);
-      return true;
-    })
-    .slice(0, 20);
+  const dedupSeen = new Set<number | string>();
+
+  const affinityPick = pickN(shuffleArray([...affinityM, ...affinityTV]), 9, dedupSeen);
+  const explorePick  = pickN(shuffleArray([...exploM, ...exploTV]), 6, dedupSeen);
+  const trendingPick = pickN(shuffleArray([...trendingM, ...trendingTV]), 6, dedupSeen);
+  const qualityPick  = pickN(qualityM, 4, dedupSeen);
+
+  const combined = [...affinityPick, ...explorePick, ...trendingPick, ...qualityPick];
+
+  // Shuffle final pour casser la structure des buckets
+  const cards = shuffleArray(combined).slice(0, 25);
 
   return NextResponse.json({ cards });
 }

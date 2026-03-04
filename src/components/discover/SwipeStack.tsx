@@ -80,7 +80,7 @@ export function SwipeStack({ cards, currentIndex, swipeCount, target, level, onS
       </div>
 
       {/* ── Stack de cartes (flex-1) ───────────────────────────────── */}
-      <div className="relative flex-1 min-h-0 mx-4">
+      <div className="relative flex-1 min-h-0 mx-4 overflow-hidden">
         {visibleCards.map((card, offset) => {
           const isTop = offset === 0;
           const title = card.title ?? card.name ?? "Sans titre";
@@ -111,6 +111,7 @@ export function SwipeStack({ cards, currentIndex, swipeCount, target, level, onS
                 mediaType={(card.media_type ?? "movie") as "movie" | "tv"}
                 onSwipe={onSwipe}
                 isTop={isTop}
+                isPriority={offset <= 1}
               />
             </motion.div>
           );
