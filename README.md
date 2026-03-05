@@ -1,7 +1,6 @@
 # 🌊 Nemo — Plateforme de streaming
 
 Plateforme de streaming de classe mondiale propulsée par **TMDb**, **Stremio/AllDebrid** et **Supabase**.
-
 ## ✨ Fonctionnalités
 - 🎬 **Catalogue TMDb complet** — Films, séries, acteurs avec données riches (France)
 - 🎯 **Hubs par provider** — Netflix, Apple TV+, Canal+, Disney+, Amazon...
