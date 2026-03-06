@@ -14,7 +14,7 @@ Plateforme de streaming de classe mondiale propulsée par **TMDb**, **Stremio/Al
 ## 🚀 Installation
 
 ```bash
-pnpm install
+pnpm install 
 ```
 
 ## ⚙️ Configuration
