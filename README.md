@@ -7,7 +7,7 @@ Plateforme de streaming de classe mondiale propulsée par **TMDb**, **Stremio/Al
 - 🎯 **Hubs par provider** — Netflix, Apple TV+, Canal+, Disney+, Amazon...
 - ⚡ **Résolution de flux via StreamFusion** — Encodage Base64, parsing regex des qualités
 - 🗄️ **Backend Supabase** — Auth, historique, listes, interactions like/dislike
-- 🎥 **Lecteur Plyr + HLS** — Qualité native, sous-titres, mode PiP
+- 🎥 **Lecteur Plyr + HLS** — Qualité native, sous-titres, mode Pi
 - 🔍 **Recherche multi** — Films, séries, acteurs en temps réel
 - 🌙 **Design Liquid Glass** — Thème ultra-sombre avec backdrop-blur premium
 
